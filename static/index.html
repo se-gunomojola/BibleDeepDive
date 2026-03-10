@@ -492,7 +492,33 @@
     margin-bottom: 0.75rem;
   }
 
-  /* ── RESPONSIVE ── */
+  .copy-btn {
+    margin-left: auto;
+    padding: 0.35rem 0.9rem;
+    background: transparent;
+    border: 1.5px solid var(--border);
+    border-radius: 4px;
+    font-family: 'Cinzel', serif;
+    font-size: 0.72rem;
+    letter-spacing: 0.1em;
+    color: var(--ink-faint);
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+
+  .copy-btn:hover {
+    background: var(--green-deep);
+    border-color: var(--green-deep);
+    color: var(--gold-pale);
+  }
+
+  .copy-btn.copied {
+    background: var(--green-deep);
+    border-color: var(--green-deep);
+    color: var(--gold-pale);
+  }
+
+
   @media (max-width: 600px) {
     .search-row { flex-direction: column; }
     .login-title { font-size: 1.8rem; }
@@ -686,12 +712,27 @@
   }
 
   // ── RENDER ─────────────────────────────────────────────────────────────────
+  function copyResult() {
+    const btn = document.getElementById('copy-btn');
+    const text = document.getElementById('raw-result').textContent;
+    navigator.clipboard.writeText(text).then(() => {
+      btn.textContent = 'COPIED ✓';
+      btn.classList.add('copied');
+      setTimeout(() => {
+        btn.textContent = 'COPY';
+        btn.classList.remove('copied');
+      }, 2500);
+    });
+  }
+
   function renderResult(ref, text) {
     const badge = currentMode === 'quick' ? '3 Layers' : '8 Layers';
     let html = `
+      <span id="raw-result" style="display:none">${text.replace(/</g,'&lt;').replace(/>/g,'&gt;')}</span>
       <div class="result-header">
         <span class="result-ref">${ref}</span>
         <span class="result-mode-badge">${badge}</span>
+        <button class="copy-btn" id="copy-btn" onclick="copyResult()">COPY</button>
       </div>
       <div class="result-content">
     `;

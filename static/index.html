@@ -1,0 +1,750 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>BibleDeepDive</title>
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700&family=EB+Garamond:ital,wght@0,400;0,500;0,600;1,400;1,500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --parchment:     #f5f0e8;
+    --parchment-dark:#ede5d0;
+    --ink:           #1a1208;
+    --ink-light:     #3d2e0e;
+    --ink-faint:     #7a6440;
+    --gold:          #8b6914;
+    --gold-light:    #c49a2a;
+    --gold-pale:     #f0e4b8;
+    --green-deep:    #1b4332;
+    --green-mid:     #2d6a4f;
+    --green-light:   #d8f3dc;
+    --red-deep:      #6b1a1a;
+    --border:        #c8b87a;
+    --shadow:        rgba(26,18,8,0.15);
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: 'EB Garamond', Georgia, serif;
+    background: var(--parchment);
+    color: var(--ink);
+    min-height: 100vh;
+    background-image:
+      url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='400' height='400'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='400' height='400' filter='url(%23n)' opacity='0.04'/%3E%3C/svg%3E");
+  }
+
+  /* ── LOGIN SCREEN ── */
+  #login-screen {
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 2rem;
+    background:
+      radial-gradient(ellipse at 50% 0%, rgba(139,105,20,0.12) 0%, transparent 70%),
+      var(--parchment);
+  }
+
+  .login-emblem {
+    width: 80px;
+    height: 80px;
+    background: var(--green-deep);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 1.5rem;
+    box-shadow: 0 4px 24px rgba(27,67,50,0.3);
+    border: 3px solid var(--gold);
+  }
+
+  .login-emblem svg {
+    width: 42px;
+    height: 42px;
+    fill: var(--gold-pale);
+  }
+
+  .login-title {
+    font-family: 'Cinzel', serif;
+    font-size: 2.4rem;
+    font-weight: 700;
+    color: var(--green-deep);
+    letter-spacing: 0.05em;
+    margin-bottom: 0.3rem;
+    text-align: center;
+  }
+
+  .login-subtitle {
+    font-style: italic;
+    color: var(--ink-faint);
+    font-size: 1.1rem;
+    margin-bottom: 2.5rem;
+    text-align: center;
+  }
+
+  .login-box {
+    background: white;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 2rem 2.5rem;
+    width: 100%;
+    max-width: 400px;
+    box-shadow: 0 8px 32px var(--shadow);
+  }
+
+  .login-box label {
+    display: block;
+    font-family: 'Cinzel', serif;
+    font-size: 0.8rem;
+    letter-spacing: 0.1em;
+    color: var(--ink-faint);
+    margin-bottom: 0.5rem;
+  }
+
+  .login-box input {
+    width: 100%;
+    padding: 0.75rem 1rem;
+    border: 1.5px solid var(--border);
+    border-radius: 4px;
+    font-family: 'EB Garamond', serif;
+    font-size: 1.1rem;
+    color: var(--ink);
+    background: var(--parchment);
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    outline: none;
+    transition: border-color 0.2s;
+    margin-bottom: 1rem;
+  }
+
+  .login-box input:focus {
+    border-color: var(--green-mid);
+  }
+
+  .login-btn {
+    width: 100%;
+    padding: 0.85rem;
+    background: var(--green-deep);
+    color: var(--gold-pale);
+    border: none;
+    border-radius: 4px;
+    font-family: 'Cinzel', serif;
+    font-size: 0.9rem;
+    letter-spacing: 0.12em;
+    cursor: pointer;
+    transition: background 0.2s, transform 0.1s;
+  }
+
+  .login-btn:hover { background: var(--green-mid); }
+  .login-btn:active { transform: scale(0.98); }
+
+  .login-error {
+    color: var(--red-deep);
+    font-size: 0.9rem;
+    font-style: italic;
+    margin-top: 0.75rem;
+    text-align: center;
+    min-height: 1.2rem;
+  }
+
+  /* ── MAIN APP ── */
+  #app-screen { display: none; min-height: 100vh; }
+
+  header {
+    background: var(--green-deep);
+    padding: 1rem 2rem;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    border-bottom: 3px solid var(--gold);
+    position: sticky;
+    top: 0;
+    z-index: 100;
+  }
+
+  .header-brand {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+  }
+
+  .header-brand h1 {
+    font-family: 'Cinzel', serif;
+    font-size: 1.3rem;
+    font-weight: 700;
+    color: var(--gold-pale);
+    letter-spacing: 0.06em;
+  }
+
+  .header-user {
+    font-size: 0.85rem;
+    color: var(--green-light);
+    font-style: italic;
+  }
+
+  .header-logo {
+    width: 36px;
+    height: 36px;
+    background: rgba(255,255,255,0.1);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 1.5px solid var(--gold);
+  }
+
+  .header-logo svg { width: 20px; height: 20px; fill: var(--gold-pale); }
+
+  /* ── SEARCH AREA ── */
+  .search-area {
+    max-width: 800px;
+    margin: 2.5rem auto 0;
+    padding: 0 1.5rem;
+  }
+
+  .search-label {
+    font-family: 'Cinzel', serif;
+    font-size: 0.75rem;
+    letter-spacing: 0.12em;
+    color: var(--ink-faint);
+    margin-bottom: 0.5rem;
+    display: block;
+  }
+
+  .search-row {
+    display: flex;
+    gap: 0.75rem;
+    margin-bottom: 1rem;
+  }
+
+  .search-input {
+    flex: 1;
+    padding: 0.9rem 1.2rem;
+    border: 1.5px solid var(--border);
+    border-radius: 4px;
+    font-family: 'EB Garamond', serif;
+    font-size: 1.15rem;
+    color: var(--ink);
+    background: white;
+    outline: none;
+    transition: border-color 0.2s, box-shadow 0.2s;
+    box-shadow: inset 0 1px 3px rgba(0,0,0,0.06);
+  }
+
+  .search-input:focus {
+    border-color: var(--green-mid);
+    box-shadow: 0 0 0 3px rgba(45,106,79,0.1), inset 0 1px 3px rgba(0,0,0,0.06);
+  }
+
+  .search-input::placeholder { color: var(--ink-faint); font-style: italic; }
+
+  .study-btn {
+    padding: 0.9rem 1.8rem;
+    background: var(--green-deep);
+    color: var(--gold-pale);
+    border: none;
+    border-radius: 4px;
+    font-family: 'Cinzel', serif;
+    font-size: 0.85rem;
+    letter-spacing: 0.1em;
+    cursor: pointer;
+    transition: background 0.2s, transform 0.1s;
+    white-space: nowrap;
+  }
+
+  .study-btn:hover { background: var(--green-mid); }
+  .study-btn:active { transform: scale(0.98); }
+  .study-btn:disabled { opacity: 0.6; cursor: not-allowed; transform: none; }
+
+  /* ── MODE TOGGLE ── */
+  .mode-row {
+    display: flex;
+    gap: 0.5rem;
+    margin-bottom: 1.2rem;
+    align-items: center;
+  }
+
+  .mode-label {
+    font-size: 0.85rem;
+    color: var(--ink-faint);
+    font-style: italic;
+    margin-right: 0.25rem;
+  }
+
+  .mode-btn {
+    padding: 0.4rem 1rem;
+    border-radius: 20px;
+    border: 1.5px solid var(--border);
+    background: white;
+    font-family: 'EB Garamond', serif;
+    font-size: 0.9rem;
+    color: var(--ink-faint);
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+
+  .mode-btn.active {
+    background: var(--green-deep);
+    border-color: var(--green-deep);
+    color: var(--gold-pale);
+  }
+
+  .mode-desc {
+    font-size: 0.8rem;
+    color: var(--ink-faint);
+    font-style: italic;
+    margin-left: 0.5rem;
+  }
+
+  /* ── SUGGESTIONS ── */
+  .suggestions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    margin-bottom: 1.5rem;
+  }
+
+  .chip {
+    padding: 0.3rem 0.85rem;
+    background: var(--gold-pale);
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    font-size: 0.85rem;
+    color: var(--ink-light);
+    cursor: pointer;
+    transition: all 0.15s;
+    font-family: 'EB Garamond', serif;
+  }
+
+  .chip:hover {
+    background: var(--green-deep);
+    color: var(--gold-pale);
+    border-color: var(--green-deep);
+  }
+
+  /* ── DIVIDER ── */
+  .divider {
+    border: none;
+    border-top: 1px solid var(--border);
+    margin: 0 1.5rem 1.5rem;
+    max-width: 800px;
+    margin-left: auto;
+    margin-right: auto;
+  }
+
+  /* ── LOADING ── */
+  #loading {
+    display: none;
+    max-width: 800px;
+    margin: 2rem auto;
+    padding: 0 1.5rem;
+    text-align: center;
+  }
+
+  .loading-inner {
+    background: white;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 3rem 2rem;
+  }
+
+  .loading-cross {
+    font-size: 2.5rem;
+    margin-bottom: 1rem;
+    animation: pulse 1.8s ease-in-out infinite;
+  }
+
+  @keyframes pulse {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50% { opacity: 0.5; transform: scale(0.95); }
+  }
+
+  .loading-text {
+    font-family: 'Cinzel', serif;
+    font-size: 1rem;
+    color: var(--green-deep);
+    letter-spacing: 0.08em;
+    margin-bottom: 0.5rem;
+  }
+
+  .loading-sub {
+    font-style: italic;
+    color: var(--ink-faint);
+    font-size: 0.9rem;
+  }
+
+  /* ── RESULTS ── */
+  #results {
+    max-width: 800px;
+    margin: 0 auto 4rem;
+    padding: 0 1.5rem;
+  }
+
+  .result-header {
+    display: flex;
+    align-items: baseline;
+    gap: 1rem;
+    margin-bottom: 1.5rem;
+    padding-bottom: 0.75rem;
+    border-bottom: 2px solid var(--gold);
+  }
+
+  .result-ref {
+    font-family: 'Cinzel', serif;
+    font-size: 1.6rem;
+    font-weight: 700;
+    color: var(--green-deep);
+  }
+
+  .result-mode-badge {
+    font-size: 0.78rem;
+    font-family: 'Cinzel', serif;
+    letter-spacing: 0.1em;
+    padding: 0.25rem 0.7rem;
+    border-radius: 20px;
+    background: var(--green-light);
+    color: var(--green-deep);
+    border: 1px solid var(--green-mid);
+  }
+
+  .result-content {
+    font-size: 1.05rem;
+    line-height: 1.85;
+    color: var(--ink);
+  }
+
+  /* Markdown rendering */
+  .result-content h1, .result-content h2 {
+    font-family: 'Cinzel', serif;
+    color: var(--green-deep);
+    margin: 2rem 0 0.75rem;
+    padding-bottom: 0.4rem;
+    border-bottom: 1px solid var(--border);
+    font-size: 1.25rem;
+    letter-spacing: 0.04em;
+  }
+
+  .result-content h3 {
+    font-family: 'Cinzel', serif;
+    color: var(--ink-light);
+    margin: 1.5rem 0 0.5rem;
+    font-size: 1.05rem;
+    letter-spacing: 0.03em;
+  }
+
+  .result-content p {
+    margin-bottom: 1rem;
+  }
+
+  .result-content strong {
+    color: var(--ink-light);
+    font-weight: 600;
+  }
+
+  .result-content em {
+    color: var(--ink-faint);
+  }
+
+  .result-content blockquote {
+    border-left: 3px solid var(--gold);
+    margin: 1rem 0;
+    padding: 0.5rem 0 0.5rem 1.2rem;
+    color: var(--ink-light);
+    font-style: italic;
+    background: var(--gold-pale);
+    border-radius: 0 4px 4px 0;
+  }
+
+  .result-content ul, .result-content ol {
+    margin: 0.5rem 0 1rem 1.5rem;
+  }
+
+  .result-content li {
+    margin-bottom: 0.4rem;
+  }
+
+  .result-content hr {
+    border: none;
+    border-top: 1px solid var(--border);
+    margin: 1.5rem 0;
+  }
+
+  .layer-block {
+    background: white;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 1.5rem 1.75rem;
+    margin-bottom: 1.25rem;
+    box-shadow: 0 2px 8px var(--shadow);
+  }
+
+  .layer-tag {
+    display: inline-block;
+    background: var(--green-deep);
+    color: var(--gold-pale);
+    font-family: 'Cinzel', serif;
+    font-size: 0.72rem;
+    letter-spacing: 0.12em;
+    padding: 0.2rem 0.7rem;
+    border-radius: 3px;
+    margin-bottom: 0.75rem;
+  }
+
+  /* ── RESPONSIVE ── */
+  @media (max-width: 600px) {
+    .search-row { flex-direction: column; }
+    .login-title { font-size: 1.8rem; }
+    .login-box { padding: 1.5rem; }
+    header { padding: 0.75rem 1rem; }
+  }
+</style>
+</head>
+<body>
+
+<!-- ── LOGIN SCREEN ─────────────────────────────────────────────────────── -->
+<div id="login-screen">
+  <div class="login-emblem">
+    <svg viewBox="0 0 24 24"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>
+  </div>
+  <h1 class="login-title">BibleDeepDive</h1>
+  <p class="login-subtitle">Serious Bible study — eight layers deep</p>
+
+  <div class="login-box">
+    <label for="access-code">ACCESS CODE</label>
+    <input type="text" id="access-code" placeholder="Enter your code" autocomplete="off" spellcheck="false">
+    <button class="login-btn" onclick="verifyCode()">ENTER</button>
+    <p class="login-error" id="login-error"></p>
+  </div>
+</div>
+
+<!-- ── MAIN APP ──────────────────────────────────────────────────────────── -->
+<div id="app-screen">
+  <header>
+    <div class="header-brand">
+      <div class="header-logo">
+        <svg viewBox="0 0 24 24"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>
+      </div>
+      <h1>BibleDeepDive</h1>
+    </div>
+    <span class="header-user" id="header-user"></span>
+  </header>
+
+  <div class="search-area">
+    <span class="search-label">PASSAGE OR BOOK</span>
+    <div class="search-row">
+      <input type="text" class="search-input" id="ref-input"
+             placeholder="e.g. Genesis 1, Psalm 23, Romans 8, John 1:1-18"
+             onkeydown="if(event.key==='Enter') runStudy()">
+      <button class="study-btn" id="study-btn" onclick="runStudy()">STUDY</button>
+    </div>
+
+    <div class="mode-row">
+      <span class="mode-label">Mode:</span>
+      <button class="mode-btn active" id="btn-quick" onclick="setMode('quick')">Quick</button>
+      <button class="mode-btn" id="btn-deep" onclick="setMode('deep')">Deep — 8 Layers</button>
+      <span class="mode-desc" id="mode-desc">Layers 1, 5 &amp; 8</span>
+    </div>
+
+    <div class="suggestions">
+      <span class="chip" onclick="setRef('Genesis 1')">Genesis 1</span>
+      <span class="chip" onclick="setRef('Genesis 22')">Genesis 22</span>
+      <span class="chip" onclick="setRef('Psalm 23')">Psalm 23</span>
+      <span class="chip" onclick="setRef('Psalm 119')">Psalm 119</span>
+      <span class="chip" onclick="setRef('Isaiah 53')">Isaiah 53</span>
+      <span class="chip" onclick="setRef('John 1:1-18')">John 1:1–18</span>
+      <span class="chip" onclick="setRef('Romans 8')">Romans 8</span>
+      <span class="chip" onclick="setRef('Hebrews 11')">Hebrews 11</span>
+    </div>
+  </div>
+
+  <hr class="divider">
+
+  <div id="loading">
+    <div class="loading-inner">
+      <div class="loading-cross">✝</div>
+      <p class="loading-text" id="loading-text">Searching the depths...</p>
+      <p class="loading-sub" id="loading-sub">Preparing your study</p>
+    </div>
+  </div>
+
+  <div id="results"></div>
+</div>
+
+<script>
+  let currentCode = '';
+  let currentMode = 'quick';
+
+  // ── LOGIN ──────────────────────────────────────────────────────────────────
+  document.getElementById('access-code').addEventListener('keydown', e => {
+    if (e.key === 'Enter') verifyCode();
+  });
+
+  async function verifyCode() {
+    const code = document.getElementById('access-code').value.trim();
+    const errEl = document.getElementById('login-error');
+    errEl.textContent = '';
+
+    if (!code) { errEl.textContent = 'Please enter your access code.'; return; }
+
+    try {
+      const res = await fetch('/verify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ code })
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        currentCode = code.toUpperCase();
+        document.getElementById('header-user').textContent = 'Welcome, ' + data.name;
+        document.getElementById('login-screen').style.display = 'none';
+        document.getElementById('app-screen').style.display = 'block';
+      } else {
+        errEl.textContent = 'Invalid code. Please check and try again.';
+        document.getElementById('access-code').value = '';
+      }
+    } catch {
+      errEl.textContent = 'Connection error. Please try again.';
+    }
+  }
+
+  // ── MODE ───────────────────────────────────────────────────────────────────
+  function setMode(mode) {
+    currentMode = mode;
+    document.getElementById('btn-quick').classList.toggle('active', mode === 'quick');
+    document.getElementById('btn-deep').classList.toggle('active', mode === 'deep');
+    document.getElementById('mode-desc').textContent =
+      mode === 'quick' ? 'Layers 1, 5 & 8' : 'All 8 layers — full seminary depth';
+  }
+
+  // ── REFERENCE ─────────────────────────────────────────────────────────────
+  function setRef(ref) {
+    document.getElementById('ref-input').value = ref;
+    document.getElementById('ref-input').focus();
+  }
+
+  // ── STUDY ──────────────────────────────────────────────────────────────────
+  const loadingMessages = [
+    ['Searching the depths...', 'Consulting the original languages'],
+    ['Tracing the covenant thread...', 'Following the story from Eden'],
+    ['Reading through the centuries...', 'Listening to Calvin, Spurgeon, Wright'],
+    ['Finding Christ in the text...', 'The whole Scripture points to him'],
+    ['Mapping to the present...', 'Where ancient truth meets today'],
+  ];
+
+  async function runStudy() {
+    const ref = document.getElementById('ref-input').value.trim();
+    if (!ref) return;
+
+    const btn = document.getElementById('study-btn');
+    btn.disabled = true;
+    btn.textContent = 'STUDYING...';
+
+    document.getElementById('results').innerHTML = '';
+    document.getElementById('loading').style.display = 'block';
+
+    // Rotate loading messages
+    let msgIdx = 0;
+    const msgInterval = setInterval(() => {
+      const [t, s] = loadingMessages[msgIdx % loadingMessages.length];
+      document.getElementById('loading-text').textContent = t;
+      document.getElementById('loading-sub').textContent = s;
+      msgIdx++;
+    }, 3500);
+
+    try {
+      const res = await fetch('/study', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ code: currentCode, reference: ref, mode: currentMode })
+      });
+
+      clearInterval(msgInterval);
+      document.getElementById('loading').style.display = 'none';
+
+      if (!res.ok) {
+        const err = await res.json();
+        document.getElementById('results').innerHTML =
+          `<div style="color:var(--red-deep);padding:1rem;font-style:italic">${err.detail}</div>`;
+        return;
+      }
+
+      const data = await res.json();
+      renderResult(ref, data.result);
+
+    } catch (e) {
+      clearInterval(msgInterval);
+      document.getElementById('loading').style.display = 'none';
+      document.getElementById('results').innerHTML =
+        `<div style="color:var(--red-deep);padding:1rem;font-style:italic">Connection error. Please try again.</div>`;
+    } finally {
+      btn.disabled = false;
+      btn.textContent = 'STUDY';
+    }
+  }
+
+  // ── RENDER ─────────────────────────────────────────────────────────────────
+  function renderResult(ref, text) {
+    const badge = currentMode === 'quick' ? '3 Layers' : '8 Layers';
+    let html = `
+      <div class="result-header">
+        <span class="result-ref">${ref}</span>
+        <span class="result-mode-badge">${badge}</span>
+      </div>
+      <div class="result-content">
+    `;
+
+    // Split by LAYER headers and wrap each in a block
+    const layerRegex = /^(LAYER \d+ —[^\n]+)/gm;
+    const parts = text.split(layerRegex);
+
+    if (parts.length > 1) {
+      // Has layer structure
+      let i = 0;
+      if (parts[0].trim()) {
+        html += `<div class="layer-block">${renderMarkdown(parts[0])}</div>`;
+      }
+      for (i = 1; i < parts.length; i += 2) {
+        const layerTitle = parts[i];
+        const layerBody = parts[i + 1] || '';
+        html += `
+          <div class="layer-block">
+            <span class="layer-tag">${layerTitle}</span>
+            ${renderMarkdown(layerBody)}
+          </div>
+        `;
+      }
+    } else {
+      html += renderMarkdown(text);
+    }
+
+    html += '</div>';
+    document.getElementById('results').innerHTML = html;
+    document.getElementById('results').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+
+  function renderMarkdown(text) {
+    return text
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+      .replace(/^#{1,2} (.+)$/gm, '<h2>$1</h2>')
+      .replace(/^### (.+)$/gm, '<h3>$1</h3>')
+      .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+      .replace(/\*(.+?)\*/g, '<em>$1</em>')
+      .replace(/^> (.+)$/gm, '<blockquote>$1</blockquote>')
+      .replace(/^- (.+)$/gm, '<li>$1</li>')
+      .replace(/(<li>.*<\/li>\n?)+/g, s => `<ul>${s}</ul>`)
+      .replace(/^---+$/gm, '<hr>')
+      .replace(/\n\n/g, '</p><p>')
+      .replace(/^(?!<[hublp])/gm, '')
+      .split('\n\n').map(p => {
+        p = p.trim();
+        if (!p) return '';
+        if (p.startsWith('<')) return p;
+        return `<p>${p}</p>`;
+      }).join('');
+  }
+</script>
+</body>
+</html>

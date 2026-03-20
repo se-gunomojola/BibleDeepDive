@@ -525,6 +525,99 @@
     .login-box { padding: 1.5rem; }
     header { padding: 0.75rem 1rem; }
   }
+
+  /* ── FOLLOW-UP ── */
+  #followup-area {
+    max-width: 800px;
+    margin: 0 auto 2rem;
+    padding: 0 1.5rem;
+    display: none;
+  }
+  .followup-box {
+    background: white;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 1.25rem 1.5rem;
+    box-shadow: 0 2px 8px var(--shadow);
+  }
+  .followup-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 0.85rem;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+  }
+  .followup-title {
+    font-family: 'Cinzel', serif;
+    font-size: 0.78rem;
+    letter-spacing: 0.12em;
+    color: var(--ink-faint);
+  }
+  .followup-mode-row { display: flex; gap: 0.4rem; }
+  .followup-mode-btn {
+    padding: 0.25rem 0.7rem;
+    border-radius: 20px;
+    border: 1px solid var(--border);
+    background: white;
+    font-family: 'EB Garamond', serif;
+    font-size: 0.82rem;
+    color: var(--ink-faint);
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+  .followup-mode-btn.active {
+    background: var(--green-deep);
+    border-color: var(--green-deep);
+    color: var(--gold-pale);
+  }
+  .followup-input-row { display: flex; gap: 0.6rem; }
+  .followup-input {
+    flex: 1;
+    padding: 0.7rem 1rem;
+    border: 1.5px solid var(--border);
+    border-radius: 4px;
+    font-family: 'EB Garamond', serif;
+    font-size: 1rem;
+    color: var(--ink);
+    background: var(--parchment);
+    outline: none;
+    transition: border-color 0.2s;
+  }
+  .followup-input:focus { border-color: var(--green-mid); }
+  .followup-input::placeholder { color: var(--ink-faint); font-style: italic; }
+  .followup-btn {
+    padding: 0.7rem 1.2rem;
+    background: var(--green-deep);
+    color: var(--gold-pale);
+    border: none;
+    border-radius: 4px;
+    font-family: 'Cinzel', serif;
+    font-size: 0.78rem;
+    letter-spacing: 0.1em;
+    cursor: pointer;
+    transition: background 0.2s;
+    white-space: nowrap;
+  }
+  .followup-btn:hover { background: var(--green-mid); }
+  .followup-btn:disabled { opacity: 0.6; cursor: not-allowed; }
+  .followup-exchange {
+    margin-top: 1rem;
+    padding-top: 1rem;
+    border-top: 1px solid var(--border);
+  }
+  .followup-q {
+    font-family: 'Cinzel', serif;
+    font-size: 0.78rem;
+    color: var(--gold);
+    letter-spacing: 0.06em;
+    margin-bottom: 0.4rem;
+  }
+  .followup-a {
+    font-size: 1rem;
+    line-height: 1.8;
+    color: var(--ink);
+  }
 </style>
 </head>
 <body>
@@ -595,14 +688,35 @@
     </div>
   </div>
 
-  <div id="results"></div>
-</div>
+  <div id="followup-area">
+    <div class="followup-box">
+      <div class="followup-header">
+        <span class="followup-title">FOLLOW-UP QUESTION</span>
+        <div class="followup-mode-row">
+          <button class="followup-mode-btn active" id="fmode-passage" onclick="setFollowupMode('passage')">This passage</button>
+          <button class="followup-mode-btn" id="fmode-open" onclick="setFollowupMode('open')">Open</button>
+        </div>
+      </div>
+      <div class="followup-input-row">
+        <input type="text" class="followup-input" id="followup-input"
+               placeholder="Ask a follow-up question..."
+               onkeydown="if(event.key==='Enter') sendFollowup()">
+        <button class="followup-btn" id="followup-btn" onclick="sendFollowup()">ASK</button>
+      </div>
+      <div id="followup-history"></div>
+    </div>
+  </div>
 
+
+
+<script>
 <script>
   let currentCode = '';
   let currentMode = 'quick';
+  let followupMode = 'passage';
+  let currentReference = '';
+  let conversationHistory = [];
 
-  // ── LOGIN ──────────────────────────────────────────────────────────────────
   document.getElementById('access-code').addEventListener('keydown', e => {
     if (e.key === 'Enter') verifyCode();
   });
@@ -611,16 +725,13 @@
     const code = document.getElementById('access-code').value.trim();
     const errEl = document.getElementById('login-error');
     errEl.textContent = '';
-
     if (!code) { errEl.textContent = 'Please enter your access code.'; return; }
-
     try {
       const res = await fetch('/verify', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ code })
       });
-
       if (res.ok) {
         const data = await res.json();
         currentCode = code.toUpperCase();
@@ -631,12 +742,9 @@
         errEl.textContent = 'Invalid code. Please check and try again.';
         document.getElementById('access-code').value = '';
       }
-    } catch {
-      errEl.textContent = 'Connection error. Please try again.';
-    }
+    } catch { errEl.textContent = 'Connection error. Please try again.'; }
   }
 
-  // ── MODE ───────────────────────────────────────────────────────────────────
   function setMode(mode) {
     currentMode = mode;
     document.getElementById('btn-quick').classList.toggle('active', mode === 'quick');
@@ -645,13 +753,19 @@
       mode === 'quick' ? 'Layers 1, 5 & 8' : 'All 8 layers — full seminary depth';
   }
 
-  // ── REFERENCE ─────────────────────────────────────────────────────────────
+  function setFollowupMode(mode) {
+    followupMode = mode;
+    document.getElementById('fmode-passage').classList.toggle('active', mode === 'passage');
+    document.getElementById('fmode-open').classList.toggle('active', mode === 'open');
+    document.getElementById('followup-input').placeholder =
+      mode === 'passage' ? 'Ask about ' + (currentReference || 'this passage') + '...' : 'Ask anything about Scripture...';
+  }
+
   function setRef(ref) {
     document.getElementById('ref-input').value = ref;
     document.getElementById('ref-input').focus();
   }
 
-  // ── STUDY ──────────────────────────────────────────────────────────────────
   const loadingMessages = [
     ['Searching the depths...', 'Consulting the original languages'],
     ['Tracing the covenant thread...', 'Following the story from Eden'],
@@ -663,15 +777,16 @@
   async function runStudy() {
     const ref = document.getElementById('ref-input').value.trim();
     if (!ref) return;
+    currentReference = ref;
+    conversationHistory = [];
+    document.getElementById('followup-area').style.display = 'none';
+    document.getElementById('followup-history').innerHTML = '';
 
     const btn = document.getElementById('study-btn');
-    btn.disabled = true;
-    btn.textContent = 'STUDYING...';
-
+    btn.disabled = true; btn.textContent = 'STUDYING...';
     document.getElementById('results').innerHTML = '';
     document.getElementById('loading').style.display = 'block';
 
-    // Rotate loading messages
     let msgIdx = 0;
     const msgInterval = setInterval(() => {
       const [t, s] = loadingMessages[msgIdx % loadingMessages.length];
@@ -686,81 +801,90 @@
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ code: currentCode, reference: ref, mode: currentMode })
       });
-
       clearInterval(msgInterval);
       document.getElementById('loading').style.display = 'none';
-
       if (!res.ok) {
         const err = await res.json();
-        document.getElementById('results').innerHTML =
-          `<div style="color:var(--red-deep);padding:1rem;font-style:italic">${err.detail}</div>`;
+        document.getElementById('results').innerHTML = '<div style="color:var(--red-deep);padding:1rem;font-style:italic">' + err.detail + '</div>';
         return;
       }
-
       const data = await res.json();
+      conversationHistory.push({ role: 'user', content: 'Study ' + ref + ' using ' + currentMode + ' mode' });
+      conversationHistory.push({ role: 'assistant', content: data.result });
       renderResult(ref, data.result);
-
+      document.getElementById('followup-area').style.display = 'block';
+      setFollowupMode('passage');
     } catch (e) {
       clearInterval(msgInterval);
       document.getElementById('loading').style.display = 'none';
-      document.getElementById('results').innerHTML =
-        `<div style="color:var(--red-deep);padding:1rem;font-style:italic">Connection error. Please try again.</div>`;
+      document.getElementById('results').innerHTML = '<div style="color:var(--red-deep);padding:1rem;font-style:italic">Connection error. Please try again.</div>';
     } finally {
-      btn.disabled = false;
-      btn.textContent = 'STUDY';
+      btn.disabled = false; btn.textContent = 'STUDY';
     }
   }
 
-  // ── RENDER ─────────────────────────────────────────────────────────────────
+  async function sendFollowup() {
+    const question = document.getElementById('followup-input').value.trim();
+    if (!question) return;
+    const btn = document.getElementById('followup-btn');
+    btn.disabled = true; btn.textContent = 'ASKING...';
+    try {
+      const res = await fetch('/followup', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          code: currentCode,
+          question,
+          mode: followupMode,
+          reference: currentReference,
+          history: conversationHistory
+        })
+      });
+      if (!res.ok) {
+        const err = await res.json();
+        appendFollowup(question, 'Error: ' + err.detail);
+        return;
+      }
+      const data = await res.json();
+      conversationHistory.push({ role: 'user', content: question });
+      conversationHistory.push({ role: 'assistant', content: data.result });
+      appendFollowup(question, data.result);
+      document.getElementById('followup-input').value = '';
+    } catch { appendFollowup(question, 'Connection error. Please try again.'); }
+    finally { btn.disabled = false; btn.textContent = 'ASK'; }
+  }
+
+  function appendFollowup(question, answer) {
+    const history = document.getElementById('followup-history');
+    const div = document.createElement('div');
+    div.className = 'followup-exchange';
+    div.innerHTML = '<p class="followup-q">Q — ' + question + '</p><div class="followup-a">' + renderMarkdown(answer) + '</div>';
+    history.appendChild(div);
+    div.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+
   function copyResult() {
     const btn = document.getElementById('copy-btn');
     const text = document.getElementById('raw-result').textContent;
     navigator.clipboard.writeText(text).then(() => {
-      btn.textContent = 'COPIED ✓';
-      btn.classList.add('copied');
-      setTimeout(() => {
-        btn.textContent = 'COPY';
-        btn.classList.remove('copied');
-      }, 2500);
+      btn.textContent = 'COPIED ✓'; btn.classList.add('copied');
+      setTimeout(() => { btn.textContent = 'COPY'; btn.classList.remove('copied'); }, 2500);
     });
   }
 
   function renderResult(ref, text) {
     const badge = currentMode === 'quick' ? '3 Layers' : '8 Layers';
-    let html = `
-      <span id="raw-result" style="display:none">${text.replace(/</g,'&lt;').replace(/>/g,'&gt;')}</span>
-      <div class="result-header">
-        <span class="result-ref">${ref}</span>
-        <span class="result-mode-badge">${badge}</span>
-        <button class="copy-btn" id="copy-btn" onclick="copyResult()">COPY</button>
-      </div>
-      <div class="result-content">
-    `;
-
-    // Split by LAYER headers and wrap each in a block
+    let html = '<span id="raw-result" style="display:none">' + text.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;') + '</span>';
+    html += '<div class="result-header"><span class="result-ref">' + ref + '</span><span class="result-mode-badge">' + badge + '</span><button class="copy-btn" id="copy-btn" onclick="copyResult()">COPY</button></div>';
+    html += '<div class="result-content">';
     const layerRegex = /^(LAYER \d+ —[^\n]+)/gm;
     const parts = text.split(layerRegex);
-
     if (parts.length > 1) {
-      // Has layer structure
-      let i = 0;
-      if (parts[0].trim()) {
-        html += `<div class="layer-block">${renderMarkdown(parts[0])}</div>`;
+      if (parts[0].trim()) html += '<div class="layer-block">' + renderMarkdown(parts[0]) + '</div>';
+      for (let i = 1; i < parts.length; i += 2) {
+        html += '<div class="layer-block"><span class="layer-tag">' + parts[i] + '</span>' + renderMarkdown(parts[i+1]||'') + '</div>';
       }
-      for (i = 1; i < parts.length; i += 2) {
-        const layerTitle = parts[i];
-        const layerBody = parts[i + 1] || '';
-        html += `
-          <div class="layer-block">
-            <span class="layer-tag">${layerTitle}</span>
-            ${renderMarkdown(layerBody)}
-          </div>
-        `;
-      }
-    } else {
-      html += renderMarkdown(text);
-    }
-
+    } else { html += renderMarkdown(text); }
     html += '</div>';
     document.getElementById('results').innerHTML = html;
     document.getElementById('results').scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -768,22 +892,20 @@
 
   function renderMarkdown(text) {
     return text
-      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
-      .replace(/^#{1,2} (.+)$/gm, '<h2>$1</h2>')
-      .replace(/^### (.+)$/gm, '<h3>$1</h3>')
-      .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
-      .replace(/\*(.+?)\*/g, '<em>$1</em>')
-      .replace(/^> (.+)$/gm, '<blockquote>$1</blockquote>')
-      .replace(/^- (.+)$/gm, '<li>$1</li>')
-      .replace(/(<li>.*<\/li>\n?)+/g, s => `<ul>${s}</ul>`)
-      .replace(/^---+$/gm, '<hr>')
-      .replace(/\n\n/g, '</p><p>')
-      .replace(/^(?!<[hublp])/gm, '')
+      .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+      .replace(/^#{1,2} (.+)$/gm,'<h2>$1</h2>')
+      .replace(/^### (.+)$/gm,'<h3>$1</h3>')
+      .replace(/\*\*(.+?)\*\*/g,'<strong>$1</strong>')
+      .replace(/\*(.+?)\*/g,'<em>$1</em>')
+      .replace(/^> (.+)$/gm,'<blockquote>$1</blockquote>')
+      .replace(/^- (.+)$/gm,'<li>$1</li>')
+      .replace(/(<li>.*<\/li>\n?)+/g, s => '<ul>' + s + '</ul>')
+      .replace(/^---+$/gm,'<hr>')
       .split('\n\n').map(p => {
         p = p.trim();
         if (!p) return '';
         if (p.startsWith('<')) return p;
-        return `<p>${p}</p>`;
+        return '<p>' + p + '</p>';
       }).join('');
   }
 </script>

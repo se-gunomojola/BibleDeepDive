@@ -11,16 +11,13 @@ from fastapi import FastAPI, HTTPException
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
+from typing import List, Optional
 import httpx
 import os
-import json
 
 app = FastAPI(title="BibleDeepDive")
 
 # ── Access Codes ───────────────────────────────────────────────────────────────
-# 7 unique codes — share each one privately with your users
-# Change these to anything you prefer before deploying
-
 VALID_CODES = {
     "SEGUN001": "Segun",
     "STUDY002": "User 2",
@@ -36,10 +33,21 @@ VALID_CODES = {
 class AccessRequest(BaseModel):
     code: str
 
+class Message(BaseModel):
+    role: str   # "user" or "assistant"
+    content: str
+
 class StudyRequest(BaseModel):
     code: str
     reference: str
     mode: str  # "quick" or "deep"
+
+class FollowUpRequest(BaseModel):
+    code: str
+    question: str
+    mode: str           # "passage" or "open"
+    reference: str      # original passage
+    history: List[Message]  # full conversation so far
 
 # ── Prompts ────────────────────────────────────────────────────────────────────
 
@@ -129,6 +137,58 @@ LAYER 8 — CURRENT SCENARIO
 Reference: {reference}
 """
 
+def build_system_prompt(reference: str, mode: str) -> str:
+    if mode == "passage":
+        return (
+            f"You are BibleDeepDive — a serious, scholarly Bible study assistant. "
+            f"The user is studying {reference}. All follow-up questions relate to this passage. "
+            f"Be precise, deep, and theological in all responses. "
+            f"Draw on original languages, historical context, and the tradition of Spurgeon, Calvin, "
+            f"Matthew Henry, N.T. Wright, and Barclay where relevant."
+        )
+    else:
+        return (
+            f"You are BibleDeepDive — a serious, scholarly Bible study assistant. "
+            f"The user began by studying {reference} but may ask about any biblical topic. "
+            f"Be precise, deep, and theological in all responses. "
+            f"Draw on original languages, historical context, and the tradition of Spurgeon, Calvin, "
+            f"Matthew Henry, N.T. Wright, and Barclay where relevant."
+        )
+
+# ── Claude API call ────────────────────────────────────────────────────────────
+
+async def call_claude(messages: list, system: str = "", max_tokens: int = 4000) -> str:
+    api_key = os.environ.get("ANTHROPIC_API_KEY")
+    if not api_key:
+        raise HTTPException(status_code=500, detail="API key not configured")
+
+    payload = {
+        "model": "claude-sonnet-4-20250514",
+        "max_tokens": max_tokens,
+        "messages": messages,
+    }
+    if system:
+        payload["system"] = system
+
+    try:
+        async with httpx.AsyncClient(timeout=120.0) as client:
+            response = await client.post(
+                "https://api.anthropic.com/v1/messages",
+                headers={
+                    "x-api-key": api_key,
+                    "anthropic-version": "2023-06-01",
+                    "content-type": "application/json",
+                },
+                json=payload
+            )
+            response.raise_for_status()
+            data = response.json()
+            return data["content"][0]["text"]
+    except httpx.TimeoutException:
+        raise HTTPException(status_code=504, detail="Request timed out — try again")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
 # ── API Routes ─────────────────────────────────────────────────────────────────
 
 @app.post("/verify")
@@ -141,49 +201,40 @@ async def verify_code(request: AccessRequest):
 
 @app.post("/study")
 async def study(request: StudyRequest):
-    # Verify access
     code = request.code.strip().upper()
     if code not in VALID_CODES:
         raise HTTPException(status_code=401, detail="Invalid access code")
-
     if not request.reference.strip():
         raise HTTPException(status_code=400, detail="Reference required")
 
-    # Build prompt
     if request.mode == "quick":
         prompt = build_quick_prompt(request.reference.strip())
     else:
         prompt = build_deep_prompt(request.reference.strip())
 
-    # Call Claude API
-    api_key = os.environ.get("ANTHROPIC_API_KEY")
-    if not api_key:
-        raise HTTPException(status_code=500, detail="API key not configured")
+    result = await call_claude(
+        messages=[{"role": "user", "content": prompt}],
+        max_tokens=8000
+    )
+    return {"result": result}
 
-    try:
-        async with httpx.AsyncClient(timeout=120.0) as client:
-            response = await client.post(
-                "https://api.anthropic.com/v1/messages",
-                headers={
-                    "x-api-key": api_key,
-                    "anthropic-version": "2023-06-01",
-                    "content-type": "application/json",
-                },
-                json={
-                    "model": "claude-sonnet-4-20250514",
-                    "max_tokens": 8000,
-                    "messages": [{"role": "user", "content": prompt}],
-                }
-            )
-            response.raise_for_status()
-            data = response.json()
-            result = data["content"][0]["text"]
-            return {"result": result}
 
-    except httpx.TimeoutException:
-        raise HTTPException(status_code=504, detail="Request timed out — try again")
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+@app.post("/followup")
+async def followup(request: FollowUpRequest):
+    code = request.code.strip().upper()
+    if code not in VALID_CODES:
+        raise HTTPException(status_code=401, detail="Invalid access code")
+    if not request.question.strip():
+        raise HTTPException(status_code=400, detail="Question required")
+
+    system = build_system_prompt(request.reference, request.mode)
+
+    # Build messages from history + new question
+    messages = [{"role": m.role, "content": m.content} for m in request.history]
+    messages.append({"role": "user", "content": request.question.strip()})
+
+    result = await call_claude(messages=messages, system=system, max_tokens=4000)
+    return {"result": result}
 
 
 @app.get("/health")

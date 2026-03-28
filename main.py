@@ -1,10 +1,10 @@
 """
 BibleDeepDive
 =============
-A web-based Bible study tool delivering 8-layer deep analysis.
-Access-controlled — 7 unique user codes loaded from environment.
+8-layer Bible study tool with RAG-enhanced commentary.
+Access-controlled — 7 unique user codes from environment.
 Rate limited — 20 requests per code per hour.
-Secure — no credentials in code or GitHub.
+RAG — real commentary from Spurgeon, Gill, Clarke, Barnes injected into Layer 7.
 
 Author: Segun Omojola
 """
@@ -12,49 +12,76 @@ Author: Segun Omojola
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
+from fastapi.middleware.httpsredirect import HTTPSRedirectMiddleware
+from starlette.middleware.base import BaseHTTPMiddleware
 from pydantic import BaseModel, field_validator
-from typing import List
+from typing import List, Optional
 import httpx
 import os
 import json
 import time
+import sys
 import logging
 
 logger = logging.getLogger(__name__)
 
 app = FastAPI(title="BibleDeepDive")
 
-# ── Access Codes — loaded from environment, never hardcoded ───────────────────
+# ── Security Headers Middleware ────────────────────────────────────────────────
+class SecurityHeadersMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request: Request, call_next):
+        response = await call_next(request)
+        response.headers["X-Frame-Options"] = "DENY"
+        response.headers["X-Content-Type-Options"] = "nosniff"
+        response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
+        response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+        response.headers["Permissions-Policy"] = "geolocation=(), microphone=(), camera=()"
+        return response
+
+app.add_middleware(SecurityHeadersMiddleware)
+
+# ── RAG Setup ──────────────────────────────────────────────────────────────────
+# Path to the shared bible-rag library
+RAG_PATH = os.environ.get("RAG_PATH", os.path.join(os.path.dirname(__file__), "..", "bible-rag"))
+rag_available = False
+
+if os.path.exists(RAG_PATH):
+    sys.path.insert(0, RAG_PATH)
+    try:
+        from query import search_commentaries, format_for_prompt
+        rag_available = True
+        logger.info("RAG enabled — commentary database loaded")
+    except Exception as e:
+        logger.warning(f"RAG unavailable (non-fatal): {e}")
+else:
+    logger.warning(f"RAG path not found: {RAG_PATH} — running without commentary database")
+
+# ── Access Codes ───────────────────────────────────────────────────────────────
 def load_valid_codes() -> dict:
     raw = os.environ.get("VALID_CODES_JSON", "{}")
     try:
         codes = json.loads(raw)
         if not codes:
-            logger.warning("VALID_CODES_JSON is empty — no users can log in")
+            logger.warning("VALID_CODES_JSON is empty")
         return codes
     except json.JSONDecodeError:
-        logger.error("VALID_CODES_JSON is not valid JSON — no users can log in")
+        logger.error("VALID_CODES_JSON is not valid JSON")
         return {}
 
 VALID_CODES = load_valid_codes()
 
-# ── Rate Limiter — 20 requests per code per hour ──────────────────────────────
-# In-memory store: { code: [timestamp, timestamp, ...] }
+# ── Rate Limiter ───────────────────────────────────────────────────────────────
 rate_store: dict = {}
 RATE_LIMIT = 20
-RATE_WINDOW = 3600  # 1 hour in seconds
+RATE_WINDOW = 3600
 
 def is_rate_limited(code: str) -> bool:
     now = time.time()
     window_start = now - RATE_WINDOW
-    # Get existing timestamps for this code
-    timestamps = rate_store.get(code, [])
-    # Keep only timestamps within the current window
-    timestamps = [t for t in timestamps if t > window_start]
+    timestamps = [t for t in rate_store.get(code, []) if t > window_start]
     if len(timestamps) >= RATE_LIMIT:
         rate_store[code] = timestamps
         return True
-    # Record this request
     timestamps.append(now)
     rate_store[code] = timestamps
     return False
@@ -80,14 +107,14 @@ class StudyRequest(BaseModel):
         if not v:
             raise ValueError("Reference required")
         if len(v) > 200:
-            raise ValueError("Reference too long — maximum 200 characters")
+            raise ValueError("Reference too long")
         return v
 
     @field_validator("mode")
     @classmethod
     def validate_mode(cls, v):
         if v not in ("quick", "deep"):
-            raise ValueError("Mode must be 'quick' or 'deep'")
+            raise ValueError("Mode must be quick or deep")
         return v
 
 class FollowUpRequest(BaseModel):
@@ -104,19 +131,19 @@ class FollowUpRequest(BaseModel):
         if not v:
             raise ValueError("Question required")
         if len(v) > 500:
-            raise ValueError("Question too long — maximum 500 characters")
+            raise ValueError("Question too long")
         return v
 
     @field_validator("history")
     @classmethod
     def validate_history(cls, v):
         if len(v) > 20:
-            raise ValueError("Conversation history too long")
+            raise ValueError("History too long")
         return v
 
 # ── Prompts ────────────────────────────────────────────────────────────────────
 
-def build_quick_prompt(reference: str) -> str:
+def build_quick_prompt(reference: str, commentary_context: str = "") -> str:
     return f"""You are BibleDeepDive — a serious Bible study tool.
 Deliver a 3-layer study of {reference}. Be precise, deep, and scholarly.
 Do not skip any layer. Do not be superficial.
@@ -142,7 +169,7 @@ LAYER 8 — CURRENT SCENARIO
 Reference: {reference}
 """
 
-def build_deep_prompt(reference: str) -> str:
+def build_deep_prompt(reference: str, commentary_context: str = "") -> str:
     return f"""You are BibleDeepDive — a serious, seminary-level Bible study tool.
 Deliver the full 8-layer study of {reference}.
 Do not skip, abbreviate, or merge any layer. Each is theologically distinct and essential.
@@ -187,10 +214,7 @@ LAYER 6 — DOCTRINAL THEOLOGY
 - What heresy or error does this passage directly correct or prevent?
 
 LAYER 7 — COMMENTARY INSIGHTS
-- What have the great commentators seen in this passage?
-- Draw on Spurgeon, Calvin, Matthew Henry, N.T. Wright, and William Barclay where relevant
-- Where do the voices of the tradition agree or see different things?
-- What is the most important interpretive move for the serious student to grasp?
+{commentary_context if commentary_context else "- Draw on Spurgeon, Calvin, Matthew Henry, N.T. Wright, and William Barclay where relevant\n- Where do the voices of the tradition agree or see different things?\n- What is the most important interpretive move for the serious student to grasp?"}
 
 LAYER 8 — CURRENT SCENARIO
 - What present-day situations does this passage directly address?
@@ -203,19 +227,27 @@ Reference: {reference}
 """
 
 def build_system_prompt(reference: str, mode: str) -> str:
-    if mode == "passage":
-        return (
-            f"You are BibleDeepDive — a serious, scholarly Bible study assistant. "
-            f"The user is studying {reference}. All follow-up questions relate to this passage. "
-            f"Be precise, deep, and theological. Draw on original languages, historical context, "
-            f"and the tradition of Spurgeon, Calvin, Matthew Henry, N.T. Wright, and Barclay where relevant."
-        )
-    return (
+    base = (
         f"You are BibleDeepDive — a serious, scholarly Bible study assistant. "
-        f"The user began by studying {reference} but may ask about any biblical topic. "
         f"Be precise, deep, and theological. Draw on original languages, historical context, "
         f"and the tradition of Spurgeon, Calvin, Matthew Henry, N.T. Wright, and Barclay where relevant."
     )
+    if mode == "passage":
+        return base + f" The user is studying {reference}. All follow-up questions relate to this passage."
+    return base + f" The user began by studying {reference} but may ask about any biblical topic."
+
+# ── RAG Helper ─────────────────────────────────────────────────────────────────
+
+def get_commentary_context(reference: str) -> str:
+    """Retrieve real commentary chunks for a reference. Returns empty string if RAG unavailable."""
+    if not rag_available:
+        return ""
+    try:
+        chunks = search_commentaries(reference, top_k=6)
+        return format_for_prompt(chunks) if chunks else ""
+    except Exception as e:
+        logger.warning(f"Commentary retrieval failed (non-fatal): {e}")
+        return ""
 
 # ── Claude API ─────────────────────────────────────────────────────────────────
 
@@ -266,16 +298,21 @@ async def study(request: StudyRequest):
     if is_rate_limited(code):
         raise HTTPException(status_code=429, detail="Rate limit reached — maximum 20 studies per hour")
 
+    ref = request.reference
+
+    # Get real commentary from RAG database
+    commentary_context = get_commentary_context(ref) if request.mode == "deep" else ""
+
     if request.mode == "quick":
-        prompt = build_quick_prompt(request.reference)
+        prompt = build_quick_prompt(ref)
     else:
-        prompt = build_deep_prompt(request.reference)
+        prompt = build_deep_prompt(ref, commentary_context)
 
     result = await call_claude(
         messages=[{"role": "user", "content": prompt}],
         max_tokens=8000
     )
-    return {"result": result}
+    return {"result": result, "rag_used": bool(commentary_context)}
 
 
 @app.post("/followup")
@@ -299,7 +336,8 @@ async def health():
         "status": "ok",
         "tool": "BibleDeepDive",
         "author": "Segun Omojola",
-        "users_configured": len(VALID_CODES)
+        "rag": "enabled" if rag_available else "disabled",
+        "users_configured": len(VALID_CODES),
     }
 
 
@@ -309,7 +347,6 @@ app.mount("/static", StaticFiles(directory="static"), name="static")
 @app.get("/")
 async def root():
     return FileResponse("static/index.html")
-
 
 if __name__ == "__main__":
     import uvicorn

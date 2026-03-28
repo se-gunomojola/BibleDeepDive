@@ -2,12 +2,10 @@ services:
   - type: web
     name: bibledeepdive
     runtime: python
-    buildCommand: bash build.sh
+    buildCommand: pip install -r requirements.txt
     startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT
     envVars:
       - key: ANTHROPIC_API_KEY
         sync: false
       - key: VALID_CODES_JSON
         sync: false
-      - key: RAG_PATH
-        value: ./bible-rag
